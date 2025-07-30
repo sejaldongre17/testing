@@ -2,3 +2,4 @@ streamlit
 firebase-admin
 langchain
 openai
+requests
