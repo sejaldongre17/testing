@@ -1,0 +1,18 @@
+[
+  {
+    "title": "Mental Health Analyzer",
+    "description": "Create a machine learning model that analyzes text messages or voice notes to detect signs of stress, anxiety, or depression among college students."
+  },
+  {
+    "title": "EduGame: Learn While You Play",
+    "description": "Build a mini browser game (quiz/puzzle) that teaches AI/ML basics interactively."
+  },
+  {
+    "title": "EcoTrack  : AI for Daily Sustainability",
+    "description": "People want to track their carbon footprint but don't know how. Create a tool that scans a product or activity (like commuting, using plastic), and estimates its environmental impact using AI.\n  "
+  },
+  {
+    "title": "AI-Powered Career Guide",
+    "description": "Build a recommender system that suggests career paths based on user interests, academic scores, and uploaded resumes."
+  }
+]

@@ -3,6 +3,69 @@ import os
 import json
 import firebase_admin
 from firebase_admin import credentials, firestore
+import requests  # ✅ Required for Groq
+# ------------------------------⬇️ ADD THIS FUNCTION BELOW⬇️------------------------------
+
+
+def judge_with_groq(project_description, team_name):
+    GROQ_API_KEY = st.secrets["groq"]["key"]
+
+    headers = {
+        "Authorization": f"Bearer {GROQ_API_KEY}",
+        "Content-Type": "application/json"
+    }
+
+    prompt = f"""
+You are an expert Hackathon Judge. Based on this student project description, rate the project from 1 to 10 on:
+- Usefulness
+- Creativity
+- Tech Stack
+- Clarity
+
+Respond ONLY in JSON format like:
+{{
+  "usefulness": 7,
+  "creativity": 8,
+  "tech_stack": 6,
+  "clarity": 9
+}}
+
+Project Description:
+\"\"\"
+{project_description[:3000]}
+\"\"\"
+    """
+
+    payload = {
+        "model": "mixtral-8x7b-32768",
+        "messages": [
+            {"role": "user", "content": prompt}
+        ],
+        "temperature": 0.5
+    }
+
+    response = requests.post(
+        "https://api.groq.com/openai/v1/chat/completions",
+        headers=headers,
+        json=payload
+    )
+
+    if response.status_code == 200:
+        try:
+            result = response.json()["choices"][0]["message"]["content"]
+            scores = json.loads(result)
+            db.collection("scores").add({
+                "team": team_name,
+                "scores": scores,
+                "judged_by": "AI-Groq"
+            })
+            return scores
+        except Exception as e:
+            st.error(f"Failed to parse AI response: {str(e)}")
+            return None
+    else:
+        st.error(f"Groq API Error {response.status_code}: {response.text}")
+        return None
 
 
 DATA_DIR = "data"
@@ -95,58 +158,33 @@ def judge_panel():
     for t in teams:
         team = t.to_dict()
         st.subheader(team["team_name"])
-        st.write( team["email"])
-        st.write( team["members"])
-        st.write( projects.get(team["team_name"], "Not Submitted"))
+        st.write(team["email"])
+        st.write(team["members"])
+        st.write(projects.get(team["team_name"], "Not Submitted"))
 
-        with st.form(f"score_{team['team_name']}"):
-            usefulness = st.slider("Usefulness", 1, 10)
-            creativity = st.slider("Creativity", 1, 10)
-            teamwork = st.slider("Teamwork", 1, 10)
-            tech_stack = st.slider("Tech Stack", 1, 10)
-            clarity = st.slider("Clarity", 1, 10)
-            if st.form_submit_button("Submit Score"):
-                db.collection("scores").add({
-                    "team": team["team_name"],
-                    "scores": {
-                        "usefulness": usefulness,
-                        "creativity": creativity,
-                        "teamwork": teamwork,
-                        "tech_stack": tech_stack,
-                        "clarity": clarity
-                    }
-                })
-                st.success(" Score submitted!")
+        if st.button(f"Judge with AI: {team['team_name']}"):
+            project_link = projects.get(team["team_name"])
+            if not project_link:
+                st.warning("Project not submitted yet.")
+                continue
 
-import streamlit as st
-import openai
-
-# ---------- OPENAI API ----------
-# Replace this with your actual OpenAI key
-openai.api_key = st.secrets["OPENAI_API_KEY"]
-
-# ---------- Streamlit Section ----------
-def mentorbot():
-    st.title("🤖 MentorBot – Ask AI Your Hackathon Doubts")
-
-    st.write("Stuck somewhere? Ask MentorBot for help with coding, ideas, or tech stack.")
-
-    user_question = st.text_input("Enter your question:")
-
-    if st.button("Get Answer") and user_question:
-        with st.spinner("MentorBot is thinking..."):
             try:
-                response = openai.ChatCompletion.create(
-                    model="gpt-3.5-turbo",
-                    messages=[
-                        {"role": "system", "content": "You are a helpful AI mentor for hackathon participants."},
-                        {"role": "user", "content": user_question}
-                    ]
-                )
-                answer = response['choices'][0]['message']['content']
-                st.success(answer)
+                if "github.com" in project_link:
+                    # Try to fetch README.md
+                    raw_url = project_link.replace("github.com", "raw.githubusercontent.com").replace("/blob/", "/") + "/README.md"
+                    res = requests.get(raw_url)
+                    content = res.text if res.status_code == 200 else "No README content found."
+                else:
+                    content = "Project description not available from this link."
+
+                with st.spinner("AI judging in progress..."):
+                    scores = judge_with_groq(content, team["team_name"])
+                    if scores:
+                        st.success("AI Judging Complete!")
+                        st.json(scores)
             except Exception as e:
-                st.error(f"Error: {e}")
+                st.error(f"Error during judging: {str(e)}")
+
 
 page = st.sidebar.radio("Navigate", [" Student/Author View", " Judge Panel"])
 
